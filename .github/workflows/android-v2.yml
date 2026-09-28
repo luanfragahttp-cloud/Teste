@@ -1,0 +1,55 @@
+name: VISIONARIO V2 - Android e telas reais
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['VISIONARIO-V2-fonte.zip', '.github/workflows/android-v2.yml']
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - run: unzip -q VISIONARIO-V2-fonte.zip -d android-project
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Compilar e testar regras
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
+          cd android-project
+          bash test-domain.sh
+          gradle --no-daemon :app:assembleDebug :app:assembleRelease
+      - name: Preparar artefatos
+        run: |
+          mkdir deliverables
+          cp android-project/app/build/outputs/apk/release/app-release-unsigned.apk deliverables/VISIONARIO-V2-unsigned.apk
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" deliverables/apksigner.jar
+      - name: Habilitar aceleracao do emulador
+        run: sudo chown "$USER" /dev/kvm
+      - name: Instalar, testar e capturar telas no Android 15
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: cd android-project && bash verify-android.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: VISIONARIO-V2-verificado
+          path: |
+            deliverables/
+            android-project/screenshots/
+            android-project/android-test-result.txt
+            android-project/android-crashes.txt
+          retention-days: 30
