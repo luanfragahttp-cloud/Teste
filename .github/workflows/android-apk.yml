@@ -1,0 +1,40 @@
+name: Gerar APK VISIONARIO
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extrair projeto original
+        run: unzip -q VISIONARIO-V1-fonte.zip -d android-project
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Preparar Android SDK
+        run: |
+          test -n "$ANDROID_HOME"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Testar regras
+        run: bash android-project/test-domain.sh
+      - name: Compilar e verificar APK
+        run: |
+          cd android-project
+          gradle --no-daemon :app:assembleDebug
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk ../VISIONARIO-V1.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VISIONARIO-V1-APK
+          path: VISIONARIO-V1.apk
+          if-no-files-found: error
+          retention-days: 30
